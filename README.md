@@ -227,8 +227,8 @@ Se você utilizar este trabalho em pesquisa acadêmica, por favor cite:
 ```bibtex
 @software{pi_root_f_A,
   title        = {$\pi\sqrt{f(A)}$: Álgebra Hexarrelacional de Significância para Algoritmos},
-  author       = {Marcabru Tech},
-  year         = {2024},
+  author       = Guilherme Gonçalves Machado
+  year         = {2026},
   url          = {https://github.com/marcabru-tech/pi-root-f-A},
   note         = {PoC/MVP da teoria de avaliação semiótica e transpilação semântica iterativa (IPII) via GuruMatrix 5D},
 }
