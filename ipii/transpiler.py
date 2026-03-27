@@ -21,9 +21,8 @@ Theoretical basis (§0.4 — IPII):
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional
 
 from core.modes import (
     Operacionalizar,
@@ -31,6 +30,7 @@ from core.modes import (
     Distribuir,
     Inferir,
     Incidir,
+    LLMScorer,
     TranslationCandidate,
 )
 from core.operator import pi_radical_significance
@@ -78,8 +78,23 @@ class SemanticTranspiler:
         max_iterations: Maximum number of refinement iterations.
         tolerance: Convergence threshold — stop when |Π(n) - Π(n-1)| < tol.
         scorer: Optional external callable ``scorer(candidate) -> float``
-                (e.g. an LLM wrapper) used by :class:`Inferir`.  When
-                *None* the built-in heuristic is used.
+                (e.g. an :class:`~core.modes.LLMScorer` instance) used by
+                :class:`~core.modes.Inferir`.  When *None* the built-in
+                heuristic is used.
+        llm_client: Optional OpenAI-compatible client.  When provided
+                (and *scorer* is *None*), an :class:`~core.modes.LLMScorer`
+                is constructed automatically for each :meth:`transpile` call
+                using the supplied client, the source code, and the target
+                language.
+        guru_matrix: Optional :class:`~gurumatrix.tensor.GuruMatrix`
+                instance.  When provided, :meth:`transpile` calls
+                :meth:`~gurumatrix.tensor.GuruMatrix.learn_from_transpilation`
+                after each successful run so the tensor adapts over time.
+        visualization_filepath: Optional path template for saving radar
+                charts.  When provided, a significance-profile radar chart
+                is saved after each :meth:`transpile` call.  The substring
+                ``"{target_lang}"`` inside the template is replaced with
+                the actual target language name.
 
     Example::
 
@@ -102,16 +117,26 @@ class SemanticTranspiler:
         max_iterations: int = 5,
         tolerance: float = 1e-4,
         scorer: Optional[Any] = None,
+        llm_client: Optional[Any] = None,
+        guru_matrix: Optional[Any] = None,
+        visualization_filepath: Optional[str] = None,
     ) -> None:
         self.max_iterations = max_iterations
         self.tolerance = tolerance
+        self._explicit_scorer = scorer
+        self._llm_client = llm_client
+        self._guru_matrix = guru_matrix
+        self._visualization_filepath = visualization_filepath
 
-        # Instantiate the five operative modes
+        # Instantiate the five operative modes.
+        # Inferir is re-instantiated per transpile() call when an LLM client
+        # is present so it can bind the source code and target language.
         self._O = Operacionalizar()
         self._P = Processar()
         self._D = Distribuir()
-        self._I = Inferir(scorer=scorer)
         self._N = Incidir()
+        # Default Inferir (may be overridden per call when LLM is active)
+        self._I = Inferir(scorer=self._explicit_scorer)
 
     def transpile(
         self,
@@ -132,6 +157,17 @@ class SemanticTranspiler:
         Raises:
             SyntaxError: If *source_code* is not valid Python.
         """
+        # Resolve scorer: explicit > LLM client > heuristic
+        if self._explicit_scorer is not None:
+            inferir = self._I
+        elif self._llm_client is not None:
+            llm_scorer = LLMScorer(
+                self._llm_client, source_code, target_lang
+            )
+            inferir = Inferir(scorer=llm_scorer)
+        else:
+            inferir = self._I
+
         # ── 𝕆  Operacionalizar ─────────────────────────────────────────
         enriched = self._O(source_code)
 
@@ -154,7 +190,7 @@ class SemanticTranspiler:
                 c.score = self._relation_score(source_code, c.code_sketch)
 
             # ── 𝕀  Inferir ─────────────────────────────────────────────
-            best_candidate = self._I(candidates)
+            best_candidate = inferir(candidates)
 
             # ── ℕ  Incidir ─────────────────────────────────────────────
             code, f_A = self._N(best_candidate)
@@ -185,7 +221,7 @@ class SemanticTranspiler:
         final_pi = pi_radical_significance(best_f_A)
         relation_scores = self._full_relation_profile(source_code, best_code)
 
-        return TranspilationResult(
+        result = TranspilationResult(
             source_code=source_code,
             target_lang=target_lang,
             final_code=best_code,
@@ -195,6 +231,36 @@ class SemanticTranspiler:
             history=history,
             relation_scores=relation_scores,
         )
+
+        # ── Post-processing: visualisation ─────────────────────────────
+        if self._visualization_filepath:
+            try:
+                from utils.visualization import plot_significance_profile  # noqa: E402
+                filepath = self._visualization_filepath.replace(
+                    "{target_lang}", target_lang
+                )
+                plot_significance_profile(
+                    relation_scores,
+                    title=f"Perfil de Significância — Python → {target_lang}",
+                    filepath=filepath,
+                )
+            except Exception:  # noqa: BLE001
+                pass  # visualisation is non-critical
+
+        # ── Post-processing: GuruMatrix learning ───────────────────────
+        if self._guru_matrix is not None:
+            try:
+                self._guru_matrix.learn_from_transpilation(
+                    source_ast=enriched,
+                    target_ast=best_code,
+                    target_lang=target_lang,
+                    pi_score=final_pi,
+                    relation_scores=relation_scores,
+                )
+            except Exception:  # noqa: BLE001
+                pass  # learning is non-critical
+
+        return result
 
     # ------------------------------------------------------------------
     # Private helpers

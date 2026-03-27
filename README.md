@@ -66,6 +66,91 @@ Quando $f$ avalia $A$, o resultado é um perfil de significância em seis dimens
 
 ---
 
+## Novas Funcionalidades
+
+### GuruMatrix Dinâmica
+
+A GuruMatrix agora pode **aprender e adaptar-se** a partir de transpilações bem-sucedidas.
+Após cada execução do IPII, o método `learn_from_transpilation` ajusta os valores do tensor
+nas coordenadas correspondentes ao padrão identificado (categoria ontológica + nível hermenêutico
+inferido a partir do score de equivalência + linguagem-alvo).  Isso cria um ciclo de melhoria
+contínua: quanto mais transpilações de alta qualidade o sistema realizar, mais precisos tornam-se
+os padrões armazenados no tensor.
+
+A GuruMatrix pode ser persistida e carregada em disco via `save`/`load` (formato NumPy `.npy`),
+permitindo que o aprendizado acumulado sobreviva entre sessões.
+
+```python
+from gurumatrix.tensor import GuruMatrix
+
+gm = GuruMatrix()
+
+# Após uma transpilação bem-sucedida:
+gm.learn_from_transpilation(
+    source_ast=enriched_ast,
+    target_ast=transpiled_code,
+    target_lang="javascript",
+    pi_score=0.93,
+    relation_scores=result.relation_scores,
+)
+
+# Salvar e recarregar
+gm.save("gurumatrix.npy")
+gm.load("gurumatrix.npy")
+```
+
+### Integração com LLM no Modo Inferir
+
+O modo Inferir ($\mathbb{I}$) pode agora delegar a pontuação dos candidatos de transpilação a um
+**Large Language Model** (LLM) via qualquer API compatível com OpenAI.  O `LLMScorer` constrói
+um prompt estruturado que descreve o código-fonte original, o candidato, e as seis relações de
+significância — pedindo ao LLM uma nota de 0.0 a 1.0 e uma justificativa breve.  Se o LLM
+não estiver disponível (chave ausente ou pacote não instalado), o sistema retorna silenciosamente
+ao scorer heurístico interno.
+
+```python
+import openai
+from core.modes import LLMScorer, build_llm_scorer
+from ipii.transpiler import SemanticTranspiler
+
+# Opção 1 — via variável de ambiente OPENAI_API_KEY (automático)
+transpiler = SemanticTranspiler(
+    llm_client=openai.OpenAI(),   # usa OPENAI_API_KEY do ambiente
+)
+result = transpiler.transpile(source_code, target_lang="javascript")
+
+# Opção 2 — factory de conveniência (detecta chave automaticamente)
+scorer = build_llm_scorer(source_code, target_lang="javascript")
+transpiler = SemanticTranspiler(scorer=scorer)
+```
+
+### Visualização do Perfil de Significância
+
+A função `plot_significance_profile` gera um **gráfico de radar** (*spider chart*) com os
+scores das seis relações de significância (ρ₁–ρ₆) — cada relação em um eixo, numa escala de
+0 a 1.  Um polígono grande e equilibrado indica uma transpilação de alta qualidade em todas as
+dimensões; eixos deficientes ficam visualmente evidentes.
+
+```python
+from utils.visualization import plot_significance_profile
+
+plot_significance_profile(
+    result.relation_scores,
+    title="Perfil de Significância — Python → JavaScript",
+    filepath="significance_profile.png",   # None para exibir interativamente
+)
+```
+
+O `SemanticTranspiler` pode gerar o gráfico automaticamente ao final de cada transpilação:
+
+```python
+transpiler = SemanticTranspiler(
+    visualization_filepath="/tmp/profile_{target_lang}.png",
+)
+```
+
+---
+
 ## Arquitetura
 
 ```mermaid
@@ -98,15 +183,18 @@ flowchart LR
 pi-root-f-A/
 ├── core/
 │   ├── operator.py      # Π(A) = [f(A)]^(1/π) + convergence theorem
-│   ├── modes.py         # 𝕆 ℙ 𝔻 𝕀 ℕ — five operative modes
+│   ├── modes.py         # 𝕆 ℙ 𝔻 𝕀 ℕ — five operative modes + LLMScorer
 │   └── relations.py     # ρ₁–ρ₆ — six significance relations
 ├── gurumatrix/
-│   └── tensor.py        # GuruMatrix: 5D numpy tensor G(i,j,k,t,l)
+│   └── tensor.py        # GuruMatrix: 5D numpy tensor G(i,j,k,t,l) + learning + persistence
 ├── ipii/
 │   ├── ast_parser.py    # Enriched AST with ontological metadata
-│   └── transpiler.py    # SemanticTranspiler — IPII orchestration
+│   └── transpiler.py    # SemanticTranspiler — IPII orchestration + LLM + visualisation
+├── utils/
+│   ├── __init__.py
+│   └── visualization.py # plot_significance_profile — radar chart for ρ₁–ρ₆
 ├── examples/
-│   └── semantic_transpilation.py  # End-to-end demo
+│   └── semantic_transpilation.py  # End-to-end demo (LLM + radar chart + learning)
 └── tests/
     ├── test_operator.py   # Convergence theorem proofs
     └── test_relations.py  # Formal property proofs (reflexivity, symmetry …)
@@ -127,6 +215,13 @@ source .venv/bin/activate   # Windows: .venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
+```
+
+As novas dependências (`matplotlib`, `scikit-learn`) são instaladas automaticamente.
+Para usar a integração com LLM, exporte também sua chave de API:
+
+```bash
+export OPENAI_API_KEY="sk-..."   # ou qualquer API compatível com OpenAI
 ```
 
 ---

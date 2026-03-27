@@ -19,8 +19,11 @@ networked topology.
 from __future__ import annotations
 
 import ast
+import json
+import logging
 import math
 import hashlib
+import os
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -57,6 +60,141 @@ class TranslationCandidate:
     code_sketch: str
     score: float = 0.0
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# LLM-based scorer (used by Inferir when an llm_client is provided)
+# ---------------------------------------------------------------------------
+
+_logger = logging.getLogger(__name__)
+
+_LLM_PROMPT_TEMPLATE = """\
+You are an expert in programming language semantics and code transpilation.
+
+Evaluate the quality of the following transpilation candidate from Python to {target_lang}.
+
+## Original Python source
+```python
+{source_code}
+```
+
+## Transpilation candidate ({target_lang})
+```
+{candidate_code}
+```
+
+Score this candidate on a scale from 0.0 to 1.0, considering:
+- ρ₁ Similitude: surface similarity of vocabulary and structure
+- ρ₂ Homologia: structural isomorphism (same control-flow shape)
+- ρ₃ Equivalência: functional substitutability (same observable behaviour)
+- ρ₄ Simetria: reversibility of the transformation
+- ρ₅ Equilíbrio: mutual complementarity between source and target
+- ρ₆ Compensação: emergent value — the target improves on the source idiomatically
+
+Respond ONLY with a JSON object in the following format (no extra text):
+{{"score": <float 0.0–1.0>, "justification": "<one sentence>"}}
+"""
+
+
+class LLMScorer:
+    """Wrap an OpenAI-compatible LLM client as a :class:`Inferir` scorer.
+
+    The scorer calls the LLM with a structured prompt that describes the
+    original source code, the transpilation candidate, and the six
+    significance relations.  The LLM is instructed to return a JSON
+    object ``{"score": float, "justification": str}``; only the numeric
+    score is used to rank candidates.
+
+    If the LLM is unavailable or returns an unparseable response, the
+    scorer falls back silently to the built-in heuristic score already
+    stored in ``candidate.score``.
+
+    Args:
+        llm_client: An initialised OpenAI-compatible client (e.g.
+            ``openai.OpenAI()``).  Must expose a
+            ``chat.completions.create`` method.
+        source_code: The original Python source being transpiled; used
+            as context in the prompt.
+        target_lang: Target language name (e.g. ``"javascript"``).
+        model: The model identifier to use for completions.
+            Defaults to ``"gpt-4o-mini"``.
+    """
+
+    def __init__(
+        self,
+        llm_client: Any,
+        source_code: str,
+        target_lang: str,
+        model: str = "gpt-4o-mini",
+    ) -> None:
+        self._client = llm_client
+        self._source_code = source_code
+        self._target_lang = target_lang
+        self._model = model
+
+    def __call__(self, candidate: "TranslationCandidate") -> float:
+        """Score *candidate* using the LLM, falling back to heuristic.
+
+        Args:
+            candidate: The :class:`TranslationCandidate` to evaluate.
+
+        Returns:
+            A float score ∈ [0, 1].
+        """
+        prompt = _LLM_PROMPT_TEMPLATE.format(
+            target_lang=self._target_lang,
+            source_code=self._source_code,
+            candidate_code=candidate.code_sketch,
+        )
+        try:
+            response = self._client.chat.completions.create(
+                model=self._model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.0,
+                max_tokens=128,
+            )
+            content = response.choices[0].message.content or ""
+            data = json.loads(content)
+            score = float(data.get("score", candidate.score))
+            return max(0.0, min(score, 1.0))
+        except Exception as exc:  # noqa: BLE001
+            _logger.debug("LLMScorer fallback (heuristic): %s", exc)
+            return Inferir._heuristic_score(candidate)
+
+
+def build_llm_scorer(
+    source_code: str,
+    target_lang: str,
+    model: str = "gpt-4o-mini",
+    api_key: Optional[str] = None,
+) -> Optional[LLMScorer]:
+    """Convenience factory: create an :class:`LLMScorer` from env vars.
+
+    Reads the ``OPENAI_API_KEY`` environment variable (or uses *api_key*
+    if supplied) to initialise an ``openai.OpenAI`` client.
+
+    Args:
+        source_code: Original Python source being transpiled.
+        target_lang: Target language name.
+        model: LLM model identifier.
+        api_key: Optional explicit API key.  Falls back to the
+            ``OPENAI_API_KEY`` environment variable when *None*.
+
+    Returns:
+        An :class:`LLMScorer` if the ``openai`` package is installed and
+        a key is available; otherwise *None* (caller should use heuristic).
+    """
+    key = api_key or os.environ.get("OPENAI_API_KEY")
+    if not key:
+        _logger.debug("build_llm_scorer: no API key found; LLM disabled.")
+        return None
+    try:
+        import openai  # noqa: E402  (lazy import — openai is optional at runtime)
+        client = openai.OpenAI(api_key=key)
+        return LLMScorer(client, source_code, target_lang, model=model)
+    except ImportError:
+        _logger.debug("build_llm_scorer: openai package not installed.")
+        return None
 
 
 # ---------------------------------------------------------------------------
