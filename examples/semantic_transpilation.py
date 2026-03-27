@@ -8,9 +8,12 @@ action:
     2.  The SemanticTranspiler orchestrates the five operative modes
         (𝕆 → ℙ → 𝔻 → 𝕀 → ℕ) in an iterative IPII loop.
     3.  The GuruMatrix reports the significance-space distance between
-        Python and the target language.
+        Python and the target language, and learns from the transpilation.
     4.  The π-radical operator Π(A) = [f(A)]^(1/π) is applied, and all
         six significance relation scores are displayed.
+    5.  A radar chart of the significance profile is saved as a PNG file.
+    6.  Optionally, an LLM (via OPENAI_API_KEY env var) scores the
+        candidate in the Inferir mode.
 
 Usage::
 
@@ -43,6 +46,7 @@ from ipii.transpiler import SemanticTranspiler
 from ipii.ast_parser import parse_and_enrich_ast
 from gurumatrix.tensor import GuruMatrix, TargetLanguage
 from core.operator import iterate_convergence
+from core.modes import build_llm_scorer
 
 
 # ---------------------------------------------------------------------------
@@ -115,19 +119,39 @@ def main(target: str = "javascript") -> None:
     _print(f"  Distance (Python → {target}): {dist:.6f}")
     _print()
 
-    # ── Step 3: IPII transpilation ──────────────────────────────────────────
-    _print(f"[bold]Step 3[/bold] — IPII: transpiling Python → {target} …"
-           if HAS_RICH else f"Step 3 — IPII: transpiling Python → {target} …")
-    transpiler = SemanticTranspiler(max_iterations=8, tolerance=1e-5)
+    # ── Step 3: Optional LLM scorer ────────────────────────────────────────
+    _print("[bold]Step 3[/bold] — Inferir: checking for LLM scorer …"
+           if HAS_RICH else "Step 3 — Inferir: checking for LLM scorer …")
+    llm_scorer = build_llm_scorer(
+        source_code=SAMPLE_SOURCE,
+        target_lang=target,
+    )
+    if llm_scorer is not None:
+        _print("  LLM scorer active (OPENAI_API_KEY detected).")
+    else:
+        _print("  No OPENAI_API_KEY found — using built-in heuristic scorer.")
+    _print()
+
+    # ── Step 4: IPII transpilation ──────────────────────────────────────────
+    chart_path = f"/tmp/significance_profile_{target}.png"
+    _print(f"[bold]Step 4[/bold] — IPII: transpiling Python → {target} …"
+           if HAS_RICH else f"Step 4 — IPII: transpiling Python → {target} …")
+    transpiler = SemanticTranspiler(
+        max_iterations=8,
+        tolerance=1e-5,
+        scorer=llm_scorer,
+        guru_matrix=gm,
+        visualization_filepath=chart_path,
+    )
     result = transpiler.transpile(SAMPLE_SOURCE, target_lang=target)
     _print(f"  Iterations  : {result.iterations}")
     _print(f"  f(A)        : {result.f_A:.6f}")
     _print(f"  Π(A)        : {result.pi_A:.6f}  [= f(A)^(1/π)]")
     _print()
 
-    # ── Step 4: Relation profile table ─────────────────────────────────────
-    _print("[bold]Step 4[/bold] — Six significance relations profile:"
-           if HAS_RICH else "Step 4 — Six significance relations profile:")
+    # ── Step 5: Relation profile table ─────────────────────────────────────
+    _print("[bold]Step 5[/bold] — Six significance relations profile:"
+           if HAS_RICH else "Step 5 — Six significance relations profile:")
     if HAS_RICH and console:
         table = Table(box=box.SIMPLE, show_header=True, header_style="bold magenta")
         table.add_column("Relation", style="cyan")
@@ -150,17 +174,40 @@ def main(target: str = "javascript") -> None:
             print(f"  {key}: {val:.4f}")
     _print()
 
-    # ── Step 5: Convergence trajectory ─────────────────────────────────────
-    _print("[bold]Step 5[/bold] — Convergence trajectory of Π^(n)(A):"
-           if HAS_RICH else "Step 5 — Convergence trajectory of Π^(n)(A):")
+    # ── Step 6: Significance profile radar chart ────────────────────────────
+    _print("[bold]Step 6[/bold] — Significance profile radar chart:"
+           if HAS_RICH else "Step 6 — Significance profile radar chart:")
+    try:
+        from utils.visualization import plot_significance_profile
+        plot_significance_profile(
+            result.relation_scores,
+            title=f"Perfil de Significância — Python → {target}",
+            filepath=chart_path,
+        )
+        _print(f"  Radar chart saved to: {chart_path}")
+    except ImportError:
+        _print("  matplotlib not installed — skipping radar chart.")
+    _print()
+
+    # ── Step 7: GuruMatrix learning ─────────────────────────────────────────
+    _print("[bold]Step 7[/bold] — GuruMatrix: persisting learned patterns …"
+           if HAS_RICH else "Step 7 — GuruMatrix: persisting learned patterns …")
+    gm_path = "/tmp/gurumatrix_learned.npy"
+    gm.save(gm_path)
+    _print(f"  GuruMatrix saved to: {gm_path}")
+    _print()
+
+    # ── Step 8: Convergence trajectory ─────────────────────────────────────
+    _print("[bold]Step 8[/bold] — Convergence trajectory of Π^(n)(A):"
+           if HAS_RICH else "Step 8 — Convergence trajectory of Π^(n)(A):")
     trajectory = iterate_convergence(result.f_A, n_iterations=8)
     for i, val in enumerate(trajectory):
         _print(f"  Π^{i}(A) = {val:.8f}")
     _print()
 
-    # ── Step 6: Generated code preview ─────────────────────────────────────
-    _print("[bold]Step 6[/bold] — Generated transpilation (preview):"
-           if HAS_RICH else "Step 6 — Generated transpilation (preview):")
+    # ── Step 9: Generated code preview ─────────────────────────────────────
+    _print("[bold]Step 9[/bold] — Generated transpilation (preview):"
+           if HAS_RICH else "Step 9 — Generated transpilation (preview):")
     preview_lines = result.final_code.splitlines()[:20]
     preview = "\n".join(preview_lines)
     if HAS_RICH and console:
