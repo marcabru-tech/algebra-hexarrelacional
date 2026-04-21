@@ -72,9 +72,16 @@ def calculate_homology(obj1: Any, obj2: Any) -> float:
     Definition (§0.3):
         x ρ₂ y  ⟺  ∃ h : Struct(x) ≅ Struct(y)
 
-    Structural comparison is approximated by the *sorted* node-type
-    multiset overlap (Sørensen–Dice coefficient) of the two AST trees,
-    which captures shared internal grammar independently of surface form.
+    Structural comparison is approximated by the *directional* node-type
+    multiset coverage of obj1 within obj2: the fraction of obj1's node
+    occurrences that are matched by obj2.  This yields an asymmetric
+    measure — ρ₂(x, y) ≠ ρ₂(y, x) in general — because a simple
+    structure may fully embed into a complex one (high score) while the
+    reverse mapping leaves many of the complex structure's nodes unmatched
+    (low score).
+
+    Formula:
+        ρ₂(x, y) = Σ_k min(s₁[k], s₂[k]) / Σ_k s₁[k]
 
     Properties verified by tests:
         - Reflexive: ρ₂(x, x) = 1
@@ -91,11 +98,11 @@ def calculate_homology(obj1: Any, obj2: Any) -> float:
     """
     s1 = _struct_multiset(obj1)
     s2 = _struct_multiset(obj2)
-    intersection = sum(min(s1.get(k, 0), s2.get(k, 0)) for k in set(s1) | set(s2))
-    total = sum(s1.values()) + sum(s2.values())
-    if total == 0:
+    total1 = sum(s1.values())
+    if total1 == 0:
         return 1.0
-    return float(2 * intersection / total)
+    intersection = sum(min(s1.get(k, 0), s2.get(k, 0)) for k in s1)
+    return float(intersection / total1)
 
 
 # ---------------------------------------------------------------------------
@@ -260,7 +267,8 @@ def calculate_compensation(obj1: Any, obj2: Any) -> float:
         Compensation score ∈ [0, 1].
     """
     r1 = calculate_similitude(obj1, obj2)
-    r2 = calculate_homology(obj1, obj2)
+    # Use the symmetric mean of the directional ρ₂ so that ρ₆ remains symmetric.
+    r2 = (calculate_homology(obj1, obj2) + calculate_homology(obj2, obj1)) / 2.0
     r3 = calculate_equivalence(obj1, obj2)
     r4 = calculate_symmetry(obj1, obj2)
     r5 = calculate_equilibrium(obj1, obj2)

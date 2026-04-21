@@ -124,22 +124,24 @@ class TestHomology:
             assert 0.0 <= h <= 1.0
 
     def test_not_symmetric_in_general(self) -> None:
-        """ρ₂ need not be symmetric: a small struct may map into a larger one."""
-        # A simple assignment embeds into a class definition but not vice-versa.
+        """ρ₂ is directional: a small structure embeds into a large one but not vice-versa."""
+        # A simple assignment has fewer node types than a class definition.
+        # ρ₂(simple, complex) measures how much of *simple* is covered by complex
+        # → expected to be high (all of simple's few nodes exist in complex).
+        # ρ₂(complex, simple) measures how much of *complex* is covered by simple
+        # → expected to be low (complex has many nodes absent from simple).
         simple = CODE_A          # "x = 1" — very few nodes
         complex_ = CODE_C        # class with method — many nodes
         h_sc = calculate_homology(simple, complex_)
         h_cs = calculate_homology(complex_, simple)
-        # Dice coefficient is symmetric by construction in our implementation,
-        # so both give the same score.  The *semantics* of homology (one embeds
-        # into the other) are directional; here we verify that at least the
-        # scores can differ when the node sets differ significantly:
         assert isinstance(h_sc, float)
         assert isinstance(h_cs, float)
-        # The implementation is Dice-symmetric, but scores will generally
-        # differ across structurally asymmetric pairs in richer implementations.
-        # We document the asymmetric intent:
         assert h_sc <= 1.0 and h_cs <= 1.0
+        # Asymmetry: the small object is better covered by the large one.
+        assert h_sc > h_cs, (
+            f"Expected ρ₂(simple, complex) > ρ₂(complex, simple); "
+            f"got {h_sc:.4f} vs {h_cs:.4f}"
+        )
 
 
 # ---------------------------------------------------------------------------
