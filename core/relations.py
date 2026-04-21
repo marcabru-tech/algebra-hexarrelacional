@@ -91,7 +91,7 @@ def calculate_homology(obj1: Any, obj2: Any) -> float:
     """
     s1 = _struct_multiset(obj1)
     s2 = _struct_multiset(obj2)
-    intersection = sum((min(s1.get(k, 0), s2.get(k, 0)) for k in set(s1) | set(s2)), 0)
+    intersection = sum(min(s1.get(k, 0), s2.get(k, 0)) for k in set(s1) | set(s2))
     total = sum(s1.values()) + sum(s2.values())
     if total == 0:
         return 1.0
