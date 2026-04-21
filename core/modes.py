@@ -301,7 +301,7 @@ class Distribuir:
     Reference: §0.2 Mode 3 — Distribuir (𝔻).
     """
 
-    DEFAULT_TARGETS: Tuple[str, ...] = ("python", "javascript", "pseudocode")
+    DEFAULT_TARGETS: Tuple[str, ...] = ("python", "javascript", "rust", "pseudocode")
 
     def __call__(
         self,
@@ -337,10 +337,26 @@ class Distribuir:
     # ------------------------------------------------------------------
     @staticmethod
     def _sketch(state: IntermediateState, lang: str) -> str:
-        """Produce a minimal structural sketch for *lang*."""
+        """Produce a translation of *state.source_code* for *lang*.
+
+        Uses :mod:`core.codegen` for ``javascript`` and ``rust`` targets to
+        generate a real AST-based transpilation.  Falls back to a commented
+        header + source for ``python``, ``pseudocode``, and unknown targets.
+        """
+        if lang == "javascript":
+            try:
+                from core.codegen import py_to_js  # noqa: E402 (lazy import)
+                return py_to_js(state.source_code)
+            except Exception:  # noqa: BLE001
+                return "// JavaScript translation sketch\n" + state.source_code
+        if lang == "rust":
+            try:
+                from core.codegen import py_to_rust  # noqa: E402 (lazy import)
+                return py_to_rust(state.source_code)
+            except Exception:  # noqa: BLE001
+                return "// Rust translation sketch\n" + state.source_code
         header = {
-            "python": "# Python translation sketch\n",
-            "javascript": "// JavaScript translation sketch\n",
+            "python": "# Python translation\n",
             "pseudocode": "-- Pseudocode sketch\n",
         }.get(lang, f"// {lang} translation sketch\n")
         return header + state.source_code
