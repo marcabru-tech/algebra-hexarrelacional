@@ -180,7 +180,7 @@ flowchart LR
 ### Module Map
 
 ```text
-pi-root-f-A/
+algebra-hexarrelacional/
 ├── core/
 │   ├── operator.py      # Π(A) = [f(A)]^(1/π) + convergence theorem
 │   ├── modes.py         # 𝕆 ℙ 𝔻 𝕀 ℕ — five operative modes + LLMScorer
@@ -206,23 +206,30 @@ pi-root-f-A/
 
 ```bash
 # Clone the repository
-git clone https://github.com/marcabru-tech/pi-root-f-A.git
-cd pi-root-f-A
+git clone https://github.com/marcabru-tech/algebra-hexarrelacional.git
+cd algebra-hexarrelacional
 
 # (Optional) create a virtual environment
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 
-# Install dependencies
+# Install runtime dependencies
 pip install -r requirements.txt
+
+# Install dev dependencies (required to run tests)
+pip install -r requirements-dev.txt
 ```
 
-As novas dependências (`matplotlib`, `scikit-learn`) são instaladas automaticamente.
-Para usar a integração com LLM, exporte também sua chave de API:
+### Integração com LLM (opcional)
+
+Para usar a integração com LLM (`openai`), instale as dependências extras e exporte sua chave de API:
 
 ```bash
+pip install -r requirements-llm.txt
 export OPENAI_API_KEY="sk-..."   # ou qualquer API compatível com OpenAI
 ```
+
+> **Nota:** A integração com LLM é completamente opcional. Os testes e o núcleo matemático funcionam sem `openai`.
 
 ---
 
