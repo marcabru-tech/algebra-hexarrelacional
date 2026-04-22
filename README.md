@@ -3,6 +3,9 @@
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial-red.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](#)
+![Languages](https://img.shields.io/badge/langs-en%20%7C%20pt_BR%20%7C%20zh%20%7C%20ja%20%7C%20ar-blue)
+![i18n](https://img.shields.io/badge/translations-137%20strings%20%C3%97%205%20langs-green)
+![RTL](https://img.shields.io/badge/RTL-Arabic%20support-orange)
 
 🌐 **Language / Idioma:** [Português](README.md) · [English](README.en.md)
 
@@ -226,9 +229,16 @@ algebra-hexarrelacional/
 │   └── visualization.py # plot_significance_profile — radar chart for ρ₁–ρ₆
 ├── examples/
 │   └── semantic_transpilation.py  # End-to-end demo (LLM + radar chart + learning)
+├── locales/               # JSON translation files
+├── core/
+│   ├── operator.py      # Π(A) = [f(A)]^(1/π) + convergence theorem
+│   ├── modes.py         # 𝕆 ℙ 𝔻 𝕀 ℕ — five operative modes + LLMScorer
+│   ├── relations.py     # ρ₁–ρ₆ — six significance relations
+│   └── i18n.py          # Translation module
 └── tests/
     ├── test_operator.py   # Convergence theorem proofs
-    └── test_relations.py  # Formal property proofs (reflexivity, symmetry …)
+    ├── test_relations.py  # Formal property proofs (reflexivity, symmetry …)
+    └── test_i18n.py       # i18n tests
 ```
 
 ---
@@ -366,6 +376,23 @@ Se você utilizar este trabalho em pesquisa acadêmica, por favor cite:
   note         = {PoC/MVP da teoria de avaliação semiótica e transpilação semântica iterativa (IPII) via GuruMatrix 5D},
 }
 ```
+
+---
+
+## 🌐 Internationalization (i18n)
+
+This project supports 5 languages through POEditor integration with automatic sync via GitHub Actions.
+
+| Language | Code | Coverage |
+|----------|------|----------|
+| English | en | 100% |
+| Português (BR) | pt_BR | 100% |
+| 简体中文 | zh | 100% |
+| 日本語 | ja | 100% |
+| العربية | ar | 100% (RTL) |
+
+- Arabic has full right-to-left layout support via `is_rtl()`
+- Translations auto-sync from POEditor every Monday (cron) or manually via `workflow_dispatch` (`.github/workflows/sync-poeditor.yml`)
 
 ---
 
