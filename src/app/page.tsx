@@ -153,7 +153,7 @@ export default function Home() {
   }
 
   function handleSaveProject() {
-    const name = prompt('Nome do projeto:');
+    const name = prompt(t('prompt.project_name', lang));
     if (!name) return;
     const project: Project = {
       id: Date.now().toString(),
@@ -221,9 +221,9 @@ export default function Home() {
           >
             {tabKey === 'transpile' && t('nav.dashboard', lang)}
             {tabKey === 'relations' && t('nav.relations', lang)}
-            {tabKey === 'analyse' && 'Analyse'}
+            {tabKey === 'analyse' && t('nav.analyse', lang)}
             {tabKey === 'operator' && t('nav.operators', lang)}
-            {tabKey === 'projects' && 'Projects'}
+            {tabKey === 'projects' && t('nav.projects', lang)}
           </button>
         ))}
       </nav>
@@ -482,7 +482,7 @@ export default function Home() {
         <section>
           <h2 style={{ marginTop: 0 }}>Saved Projects</h2>
           {projects.length === 0 ? (
-            <p style={{ color: '#666' }}>No projects saved yet. Use the &ldquo;Save project&rdquo; button on the Transpile tab.</p>
+            <p style={{ color: '#666' }}>{t('projects.empty', lang)}</p>
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
