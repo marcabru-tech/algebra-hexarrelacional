@@ -1,0 +1,52 @@
+name: Cleanup Merged Branches
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Delete merged remote branches
+        run: |
+          git fetch origin '+refs/heads/*:refs/remotes/origin/*'
+
+          DELETED=0
+          SKIPPED=0
+
+          echo "=== All remote branches ==="
+          git branch -r | sed 's|  origin/||'
+
+          echo ""
+          echo "=== Branches merged into main ==="
+          git branch -r --merged origin/main | grep -v 'origin/main' | sed 's|  origin/||'
+
+          echo ""
+          echo "=== Starting deletion ==="
+          for branch in $(git branch -r --merged origin/main \
+              | grep -v 'origin/main' \
+              | sed 's|  origin/||'); do
+            echo "Deleting: $branch"
+            if git push origin --delete "$branch"; then
+              DELETED=$((DELETED + 1))
+            else
+              echo "WARNING: Failed to delete $branch"
+              SKIPPED=$((SKIPPED + 1))
+            fi
+          done
+
+          echo ""
+          echo "=== Summary ==="
+          echo "Branches deleted: $DELETED"
+          echo "Branches skipped/failed: $SKIPPED"
+          echo "Branches remaining: main"
+          REMAINING=$(git ls-remote --heads origin | wc -l)
+          echo "Total remote branches now: $REMAINING"
